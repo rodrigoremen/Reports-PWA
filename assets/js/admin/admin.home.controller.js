@@ -6,6 +6,9 @@
     changeView('');
   }
 })();
+
+const incidencesDB = new PounchDB('Incidences');
+
 $(document).ready(function () {
   if (!fullname) fullname = localStorage.getItem('fullname');
   if (!role) role = localStorage.getItem('activeRole');

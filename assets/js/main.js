@@ -5,9 +5,76 @@
  * Author: BootstrapMade.com
  * License: https://bootstrapmade.com/license/
  */
-if(navigator.serviceWorker){
-  navvigator.serviceWorker.register('/sw.js')
+
+let swReg;
+
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.register('/sw.js').then((swRegRes)=>{
+    swReg =swRegRes;
+    swReg.pushManager.getSubscription().then(verifyNotifications);
+  });
 }
+
+const verifyNotifications = (activated) =>{
+  if (activated) {
+    $('#notifyActivated').css('display', 'block');
+    $('#notifyDeactivated').css('display', 'none');
+  } else {
+    $('#notifyActivated').css('display', 'none');
+    $('#notifyDeactivated').css('display', 'block');
+  }
+}
+
+const parseJWT = () => {
+  const token = localStorage.getItem('token');
+  const payload = token.split('.')[1];
+  const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+  const user = decodeURIComponent(
+    window.atob(base64).split('').map((c) => {
+      return `%${('00' + c.charCodeAt(0).toString(16).slice(-2))}`
+    }).join('')
+  );
+  return JSON.parse(user);
+};
+
+$(document).on('click', '#notifications', async ()=> {
+  try {
+    const subscription = await swReg.pushManager.getSubscription();
+
+    if (!swReg) return;
+
+    if (subscription) {
+      subscription.unsuscribe().then(() => verifyNotifications(false));
+      return;
+    }
+
+    const response = await axiosClient.get('/notification/', {
+      responseType: 'arraybuffer',
+    });
+
+    const data = new Uint8Array(response);
+
+    swReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey:data
+    }).then((res) => res.toJSON())
+    .then((subscription) => {
+      const user = parseJWT();
+      axiosClient.post('/notification/',{
+        id: user.id,
+        userDetails: {subscription}
+      }).then((res) => verifyNotifications(res['updated']))
+      .catch((res) => {
+        swReg.pushManager.getSubscription().then((subscription) => {
+          subscription.unsuscribe().then(() => verifyNotifications(false));
+        });
+      });
+    })
+   
+  } catch (error) {
+    
+  }
+})
 
 var fullname = ``;
 var role = ``;
@@ -21,7 +88,7 @@ const changeView = (role) => {
     case 'ENCARGADO':
       window.location.href = '/pages/attendant/home.html';
       break;
-    case 'DOCENTE':
+    case 'EMPLEADO':
       window.location.href = '/pages/docent/home.html';
       break;
     default:
