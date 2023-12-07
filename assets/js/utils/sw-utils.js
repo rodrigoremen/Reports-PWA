@@ -1,53 +1,47 @@
-const updateDynamicCache = (dynamicCache, req, res) => {
-    if (res.ok) {
-        return caches.open(dynamicCache).then((cache) => {
-            cache.put(req, res.clone());
+const updateDynamicCache = (cacheName,req,res) =>{//mantener actualizads las apis...
+    if(res.ok){
+        return caches.open(cacheName).then((cache)=>{
+            cache.put(req,res.clone());
             return res.clone();
         })
-    } else {
+    }else{
         return res;
     }
 }
 
-const updateStaticCache = async (staticCache, req, APP_SHELL_INMUTABLE) => {
-    if (APP_SHELL_INMUTABLE.includes(req.url)) {
-        //No hace falta actualizar
-    } else {
-        let response = null;
-        try {
-            response = await fetch(req);
-        } catch (error) {
-            console.log(error);
-        }
-        return updateDynamicCache(staticCache, req, response);
-    }
-};
+const updateStaticCache = (cacheName,req,APP_SHELL_INMUTABLE) =>{
+    if(!APP_SHELL_INMUTABLE.includes(req.url)){
+        return fetch(req).then((response)=>{
+            return updateDynamicCache(cacheName,req,response);
+        })
+    }    
+}
 
-const apiSaveIncidence = (cacheName, req) => {
-    if (
-        req.url.indexOf("/api/notification") >= 0 || req.url.indexOf("/api/notification/subscribe"))
-    {
-        return axiosClient(req.url);
-    }
-    if (req.clone().method === "POST") {
-        if (self.registration.sync && !navigator.onLine) {
-            return req
-                .clone()
-                .text()
-                .then((body) => {
-                    return saveIncidence(JSON.parse(body))
-                });
-        }
+const apiIncidencesManager = (cacheName,req) =>{
+    //only network
+    if(req.url.indexOf('/api/notification')>=0 || 
+    req.url.indexOf('/api/auth')>=0){
         return fetch(req);
-    } else {
-        return fetch(req).then((response) => {
-            if (response.ok) {
-                updateDynamicCache(cacheName, req, response.clone());
-            } else {
+    }
+    //network with cache callfack / update
+    if(req.clone().method === 'POST'){
+        if(self.ServiceWorkerRegistration.sync && !navigator.onLine){
+            return req.clone().text().then((body)=>{
+                return saveIncidences(JSON.parse(body));
+            })
+        }else{
+            return fetch(req);
+        }
+    }else{
+        return fetch(req).then(response=>{
+            if(response.ok){
+                updateDynamicCache(cacheName,req,response.clone());
+                return response.clone();
+            }else{
                 return caches.match(req);
             }
-        }).catch((error) => {
-            return caches.match(req);
-        });
+        }).catch((err)=>{
+            caches.match(req);
+        })
     }
-};
+}
